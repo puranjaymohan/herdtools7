@@ -1,0 +1,53 @@
+BPF "BPF Memory model based on LKMM"
+
+(*************)
+(* Utilities *)
+(*************)
+
+let barrier = [M];fencerel(SYNC);[M]
+
+let po-loc-no-w = po-loc \ (po-loc?;[W];po-loc)
+let rsw = rf^-1;rf
+
+(*************)
+(* ppo rules *)
+(*************)
+
+(* Overlapping-Address Orderings *)
+let r1 = [M];po-loc;[W]
+and r2 = ([R];po-loc-no-w;[R]) \ rsw
+(* Explicit Synchronization *)
+and r3 = barrier
+(* Syntactic Dependencies *)
+and r4 = [M];addr;[M]
+and r5 = [M];data;[W]
+and r6 = [M];ctrl;[W]
+(* Pipeline Dependencies *)
+and r7 = [M];(addr|data);[W];rfi;[R]
+and r8 = [M];addr;[M];po;[W]
+
+let ppo =
+  r1
+| r2
+| r3
+| r4
+| r5
+| r6
+| r7
+| r8
+
+(* Compute coherence relation *)
+include "cos-opt.cat"
+
+(**********)
+(* Axioms *)
+(**********)
+
+(* Sc per location *)
+acyclic co|rf|fr|po-loc as Coherence
+
+(* Main model axiom *)
+acyclic co|rfe|fr|ppo as Model
+
+(* Atomicity axiom *)
+empty rmw & (fre;coe) as Atomic
