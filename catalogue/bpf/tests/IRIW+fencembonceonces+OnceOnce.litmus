@@ -3,7 +3,7 @@ BPF IRIW+fencembonceonces+OnceOnce
 (*
  * Result: Never
  *
- * Test of independent reads from independent writes with smp_mb()
+ * Test of independent reads from independent writes with a fence
  * between each pairs of reads.  In other words, is smp_mb() sufficient to
  * cause two different reading processes to agree on the order of a pair
  * of writes, where each write is to a different variable by a different
