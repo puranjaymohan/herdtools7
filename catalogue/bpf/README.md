@@ -60,17 +60,52 @@ r5 = *(u64 *)(r6 + 0)
 ```
 3. Store Immediate
 ```
-*(u8 *)(r0 + 0)  = 23 
+*(u8 *)(r0 + 0)  = 23
 *(u16 *)(r4 + 0) = -32
 *(u32 *)(r5 + 0) = 44
 *(u64 *)(r6 + 0) = 55
 ```
+#### Atomic Instructions
+
+1. 32 and 64 bit atomic operations:
+These instructions do an ALU op to a memory location (register + offset) atomically. It can work with 32-bit and 64-bit data.
+```
+lock *(u32 *)(rd + offset16) += rs
+lock *(u32 *)(rd + offset16) &= rs
+lock *(u32 *)(rd + offset16) |= rs
+lock *(u32 *)(rd + offset16) ^= rs
+
+lock *(u64 *)(rd + offset16) += rs
+lock *(u64 *)(rd + offset16) &= rs
+lock *(u64 *)(rd + offset16) |= rs
+lock *(u64 *)(rd + offset16) ^= rs
+```
+
+2. 32 and 64 bit atomic operations with fetch:
+These instructions fetch the value from memory and then do an ALU op on the memory location (register + offset) atomically. It can work with 32-bit and 64-bit data.
+```
+rs = atomic_fetch_add ((u32 *)(rd + offset16), rs)
+rs = atomic_fetch_and ((u32 *)(rd + offset16), rs)
+rs = atomic_fetch_aor ((u32 *)(rd + offset16), rs)
+rs = atomic_fetch_xor ((u32 *)(rd + offset16), rs)
+
+rs = atomic_fetch_add ((u64 *)(rd + offset16), rs)
+rs = atomic_fetch_and ((u64 *)(rd + offset16), rs)
+rs = atomic_fetch_aor ((u64 *)(rd + offset16), rs)
+rs = atomic_fetch_xor ((u64 *)(rd + offset16), rs)
+```
+
+3. Atomic exchange instruction 32 and 64 bit
+This instruction atomically exchanges the value in a register rs with the value addressed by rd + offset
+```
+rs = xchg_64 (rd + offset16, rs)
+rs = xchg_32 (rd + offset16, rs)
+```
 
 ####  Barrier / Fence instruction
-BPF doesn't have a separate sync instructions. Once herf7 supports BPF atomic instructions then we can use `atomic_fetch_add(0, rd)` and call it the barrier instruction. 
-But some litmus tests need a barrier to be implemented, so a `sync` instruction is provided that can be used directly in the litmus test. It does `M -> barrier -> M` (Strong Fence).
+BPF doesn't have a real sync instruction. BPF atomic instructions with fetch provide full ordering as enforced by `bpf_lkmm.cat`. So, we a atomic op with fetch to enforce ordering in the programs.
 ```
-sync
+r6 = atomic_fetch_add((u64*)(r5 + 0), r6)
 ```
 ### Provided cat models
 The default model for BPF is the weakest available model, so if you run a litmus test like:
