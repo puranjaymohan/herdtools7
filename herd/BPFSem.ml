@@ -60,34 +60,43 @@ module
         | BPF.ASR
           -> unimplemented (BPF.pp_op BPF.ASR)
 
+      let tr_opamo op = match op with
+        | BPF.AMOXCHG -> assert false
+        | BPF.AMOADD -> Op.Add
+        | BPF.AMOAND -> Op.And
+        | BPF.AMOOR -> Op.Or
+        | BPF.AMOXOR -> Op.Xor
+        | BPF.AMOCMPXCHG ->
+          unimplemented "atomic op"
+
       let mk_read sz ato loc v =
         Act.Access
           (Dir.R, loc, v, ato, (), sz, Act.access_of_location_std loc)
 
       let read_reg is_data r ii =
-          M.read_loc is_data (mk_read nat_sz false) (A.Location_reg (ii.A.proc,r)) ii
+          M.read_loc is_data (mk_read nat_sz BPF.RLX) (A.Location_reg (ii.A.proc,r)) ii
 
       let read_reg_ord = read_reg false
       let read_reg_data = read_reg true
 
       let do_read_mem sz ato a ii = M.read_loc false (mk_read sz ato) (A.Location_global a) ii
-      let read_mem sz a ii = do_read_mem sz false a ii
-      let read_mem_atomic sz a ii = do_read_mem sz true a ii
+      let read_mem sz a ii = do_read_mem sz BPF.RLX a ii
+      let read_mem_atomic sz a ii = do_read_mem sz BPF.SC a ii
 
       let write_reg r v ii =
           M.mk_singleton_es
             (Act.Access
-               (Dir.W, (A.Location_reg (ii.A.proc,r)), v, false, (), nat_sz, Access.REG))
+               (Dir.W, (A.Location_reg (ii.A.proc,r)), v, BPF.RLX, (), nat_sz, Access.REG))
             ii
 
       let write_mem sz a v ii  =
         M.mk_singleton_es
-          (Act.Access (Dir.W, A.Location_global a, v, false, (), sz, Access.VIR)) ii
+          (Act.Access (Dir.W, A.Location_global a, v, BPF.RLX, (), sz, Access.VIR)) ii
 
       let write_mem_atomic sz a v resa ii =
         let eq = [M.VC.Assign (a,M.VC.Atom resa)] in
         M.mk_singleton_es_eq
-          (Act.Access (Dir.W, A.Location_global a, v, true, (), sz, Access.VIR))
+          (Act.Access (Dir.W, A.Location_global a, v, BPF.SC, (), sz, Access.VIR))
           eq ii
 
       let create_barrier b ii =
@@ -111,6 +120,32 @@ module
         V.Cst.Scalar.of_int (k land 0xffff)
         |> V.Cst.Scalar.sxt MachSize.Word
         |> fun sc -> V.Val (Constant.Concrete sc)
+
+      let amo sz op an rd rs k f ii =
+        let open BPF in
+          let ra = read_reg_ord rd ii
+          and rv = read_reg_data rs ii
+          and ca v = M.add v (imm16ToV k) in
+          match op with
+          | AMOXCHG ->
+              (ra >>| rv) >>=
+              (fun (ea, vstore) ->
+                (ca ea) >>=
+              (fun (loc) ->
+                M.read_loc false
+                  (fun loc v -> Act.Amo (loc,v,vstore, an,(),sz,Access.VIR))
+                  (A.Location_global loc) ii)) >>= fun r -> write_reg rs r ii
+          | _ ->
+              (ra >>| rv) >>=
+              (fun (ea, v) ->
+                (ca ea) >>=
+              (fun (loc) ->
+                M.fetch (tr_opamo op) v
+                  (fun v vstored ->
+                    Act.Amo (A.Location_global loc,v,vstored, an,(),sz,Access.VIR))
+                  ii))  >>=  fun v -> match f with
+                                | true -> write_reg rs v ii
+                                | false -> M.unitT ()
 
 (* Entry point *)
 
@@ -149,6 +184,8 @@ module
                 >>= B.next1T
           | BPF.MOVI (rd, k) ->
                 write_reg rd (V.intToV k) ii >>= B.next1T
+          | BPF.AMO (aop, w, rd, k, rs, annot, f) ->
+                amo (tr_sz w) aop annot rd rs k f ii >>= B.next1T
           | BPF.SYNC ->
               create_barrier BPF.Sync ii >>= B.next1T
           end

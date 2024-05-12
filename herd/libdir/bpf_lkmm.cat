@@ -5,6 +5,7 @@ BPF "BPF Memory model based on LKMM"
 (*************)
 
 let barrier = [M];fencerel(SYNC);[M]
+let f_amo_barrier = [M];fencerel(SC);[M]
 
 let po-loc-no-w = po-loc \ (po-loc?;[W];po-loc)
 let rsw = rf^-1;rf
@@ -25,6 +26,8 @@ and r6 = [M];ctrl;[W]
 (* Pipeline Dependencies *)
 and r7 = [M];(addr|data);[W];rfi;[R]
 and r8 = [M];addr;[M];po;[W]
+(* AMO with fetch are SC *)
+and r9 = f_amo_barrier
 
 let ppo =
   r1
@@ -35,6 +38,7 @@ let ppo =
 | r6
 | r7
 | r8
+| r9
 
 (* Compute coherence relation *)
 include "cos-opt.cat"

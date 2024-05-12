@@ -18,15 +18,23 @@ module Make
          (V:Value.S with type Cst.Instr.t  = BPFBase.instruction ) =
   struct
     include BPFBase
-    let is_amo _ = false
-    let pp_barrier_short = pp_barrier
-    let reject_mixed = true
+    let is_amo = function
+            | AMO(_,_,_,_,_,SC,_) -> true
+            | _ -> false
 
-    type lannot = bool (* atomicity *)
+    let pp_barrier_short = pp_barrier
+    let reject_mixed = false
+
     let get_machsize _ = V.Cst.Scalar.machsize
 
-    let empty_annot = false
-    let is_atomic annot = annot
+    let empty_annot = RLX
+    let is_sc = function
+            | SC -> true
+            | RLX -> false
+
+    let is_atomic = function
+            | SC -> true
+            | RLX -> false
 
     let ifetch_value_sets = []
 
@@ -34,7 +42,7 @@ module Make
 
     let cmo_sets = []
 
-    let annot_sets = ["X", is_atomic]
+    let annot_sets = ["SC", is_sc; "X", is_atomic;]
 
     include Explicit.No
     include PteValSets.No
@@ -42,13 +50,16 @@ module Make
     let is_isync _ = false
     let pp_isync = "???"
 
-    let pp_annot annot =
-      if annot then "*" else ""
+    let pp_annot = function
+                | RLX -> ""
+                | SC -> "SC"
 
     module V = V
 
     let mem_access_size = function
-            | LOAD (w,_,_,_,_) | STORE (w,_,_,_) -> Some (tr_width w)
+            | LOAD (w,_,_,_,_)
+            | AMO (_,w,_,_,_,_,_)
+            | STORE (w,_,_,_) -> Some (tr_width w)
             | _ -> None
 
     include NoSemEnv

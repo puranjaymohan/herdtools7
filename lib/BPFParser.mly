@@ -25,11 +25,14 @@ module A=BPFBase
 %token <BPFBase.signed * BPFBase.width> SIZE
 
 %token SEMI PIPE COLON LPAR RPAR MINUS EQUAL STAR SLASH PLUS LAND XOR
-(*%token COMMA *)
+%token COMMA
 
 /* Instruction tokens */
 %token NOP SYNC
 %token PERCENT LSL LSR ASR
+%token <BPFBase.aop> AMOF
+%token <BPFBase.width> AMOXCHGT
+%token LOCK
 
 %type <MiscParser.proc list * (BPFBase.pseudo) list list> main
 %start  main
@@ -156,6 +159,31 @@ instr:
 | STAR LPAR SIZE STAR RPAR LPAR reg PLUS k RPAR EQUAL k
   { let _,w = $3 in
     A.STOREI (w,$7,$9,$12) }
+
+/* atomic ops with fetch rs = atomic_fetch_or ((u64 *)(rd + offset16), rs)  */
+| reg EQUAL AMOF LPAR LPAR SIZE STAR RPAR LPAR reg PLUS k RPAR COMMA reg RPAR
+  { let op = $3 in
+    let _,w = $6 in
+   A.AMO(op, w, $10, $12, $15, A.SC, true) }
+
+/* atomic exchange rs = xchg_64 (rd + offset16, rs) */
+| reg EQUAL AMOXCHGT LPAR reg PLUS k COMMA reg RPAR
+  { let sz = $3 in
+   A.AMO(A.AMOXCHG, sz, $5, $7, $9, A.SC, true) }
+
+/* atomic operations without fetch lock *(u64 *)(rd + offset16) = rs  */
+| LOCK STAR LPAR SIZE STAR RPAR LPAR reg PLUS k RPAR PLUS EQUAL reg
+  { let _,w = $4 in
+    A.AMO(A.AMOADD, w, $8, $10, $14, A.RLX, false) }
+| LOCK STAR LPAR SIZE STAR RPAR LPAR reg PLUS k RPAR LAND EQUAL reg
+  { let _,w = $4 in
+    A.AMO(A.AMOAND, w, $8, $10, $14, A.RLX, false) }
+| LOCK STAR LPAR SIZE STAR RPAR LPAR reg PLUS k RPAR PIPE EQUAL reg
+  { let _,w = $4 in
+    A.AMO(A.AMOOR, w, $8, $10, $14, A.RLX, false) }
+| LOCK STAR LPAR SIZE STAR RPAR LPAR reg PLUS k RPAR XOR EQUAL reg
+  { let _,w = $4 in
+    A.AMO(A.AMOXOR, w, $8, $10, $14, A.RLX, false) }
 
 /* MOV r0 = r1 */
 | reg EQUAL reg

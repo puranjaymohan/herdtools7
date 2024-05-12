@@ -96,6 +96,8 @@ let pp_barrier = function
 
 let barrier_compare = compare
 
+type lannot = RLX | SC
+
 (****************)
 (* Instructions *)
 (****************)
@@ -106,6 +108,8 @@ type lbl = Label.t
 type op = ADD | SUB | MUL | DIV | REM | AND | OR | XOR | LSL | LSR | ASR
 
 type width = Byte | Half | Word | Double
+
+type aop = AMOADD | AMOOR | AMOAND | AMOXOR | AMOXCHG | AMOCMPXCHG
 
 let tr_width = function
   | Byte -> MachSize.Byte
@@ -124,6 +128,7 @@ type instruction =
   | STOREI of width * reg * k * k
   | MOV of reg * reg
   | MOVI of reg * k
+  | AMO of aop * width * reg * k * reg * lannot * bool
   | SYNC
 
 type parsedInstruction = instruction
@@ -170,6 +175,7 @@ let fold_regs (f_reg,f_sreg) =
   | OP (_,r1,r2)
   | LOAD (_,_,r1,r2,_)
   | MOV (r1, r2)
+  | AMO (_,_,r1,_,r2,_,_)
   | STORE (_,r1,_,r2) ->
       fold_reg r1 (fold_reg r2 c)
   | MOVI (r1,_)
@@ -189,6 +195,8 @@ let map_regs f_reg f_symb =
       OP (op,map_reg r1,map_reg r2)
   | OPI (op,r1,k) ->
       OPI (op,map_reg r1,k)
+  | AMO (op,w,r1,k,r2,s,f) ->
+      AMO (op, w, map_reg r1, k, map_reg r2, s,f)
   | LOAD (w,s,r1,r2,k) ->
       LOAD (w,s,map_reg r1, map_reg r2, k)
   | STORE (w,r1,k,r2) ->
@@ -214,6 +222,7 @@ let get_next = function
   | NOP
   | OP _
   | OPI _
+  | AMO _
   | LOAD _
   | STORE _
   | STOREI _
@@ -240,6 +249,7 @@ include Pseudo.Make
         | SYNC -> 0
         | STORE _
         | STOREI _
+        | AMO _
         | LOAD _ -> 1
 
       let size_of_ins _ = 4

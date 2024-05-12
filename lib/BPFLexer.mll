@@ -32,6 +32,13 @@ let check_name = function
   | "u16" -> SIZE (Unsigned, Half)
   | "u32" -> SIZE (Unsigned, Word)
   | "u64" -> SIZE (Unsigned, Double)
+  | "atomic_fetch_add" -> AMOF (AMOADD)
+  | "atomic_fetch_and" -> AMOF (AMOAND)
+  | "atomic_fetch_or" -> AMOF (AMOOR)
+  | "atomic_fetch_xor" -> AMOF (AMOXOR)
+  | "xchg_64"          -> AMOXCHGT (Double)
+  | "xchg_32"          -> AMOXCHGT (Word)
+  | "lock"             -> LOCK
   | "sync" -> SYNC
   | name -> parse_reg name
 
@@ -49,7 +56,7 @@ rule token = parse
 | 'P' (num as x)
     { PROC (int_of_string x) }
 | ';' { SEMI }
-(*| ',' { COMMA }*)
+| ',' { COMMA }
 | '|' { PIPE }
 | '(' { LPAR }
 | ')' { RPAR }
